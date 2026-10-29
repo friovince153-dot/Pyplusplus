@@ -12,6 +12,7 @@ RUNTIME = r'''#include <iostream>
 #include <stdexcept>
 
 struct PyError : std::runtime_error { using std::runtime_error::runtime_error; };
+static long long py_line = 0;   // source line of the statement being executed
 
 // ---- indexing: negative indices + bounds checks ----
 template<class T> T& idx(std::vector<T>& v, long long i) {
@@ -67,7 +68,12 @@ inline std::string py_str(const std::string& s) { return s; }
 inline std::string py_str(bool b) { return b ? "True" : "False"; }
 inline std::string py_str(long long v) { return std::to_string(v); }
 inline std::string py_str(double d) {
-    std::ostringstream o; o << d; std::string s = o.str();
+    if (std::isnan(d)) return "nan";
+    if (std::isinf(d)) return d < 0 ? "-inf" : "inf";
+    std::string s;
+    for (int p = 15; p <= 17; ++p) {             // shortest text that reads back exactly
+        std::ostringstream o; o.precision(p); o << d; s = o.str();
+        if (std::stod(s) == d) break; }
     if (s.find_first_of(".en") == std::string::npos) s += ".0"; return s; }
 template<class T> std::string py_str(const std::vector<T>& v);
 template<class K, class V> std::string py_str(const std::map<K, V>& m);
@@ -175,7 +181,7 @@ class CodeGen:
         for s in prog:
             if not isinstance(s, Def): self.stmt(s)
         self.depth -= 1
-        self.w('} catch (const PyError& e) { std::cerr << "Runtime error: " << e.what() << std::endl; return 1; }')
+        self.w('} catch (const PyError& e) { std::cerr << "Runtime error (line " << py_line << "): " << e.what() << std::endl; return 1; }')
         self.w("return 0;"); self.depth -= 1; self.w("}")
         return "\n".join(self.out)
 
@@ -198,7 +204,9 @@ class CodeGen:
         self.depth -= 1; self.w("}")
 
     # ---- statements ----
-    def stmt(self, s): getattr(self, "g_" + type(s).__name__)(s)
+    def stmt(self, s):
+        self.w(f"py_line = {s.line};")
+        getattr(self, "g_" + type(s).__name__)(s)
     def body(self, b):
         self.depth += 1
         for s in b: self.stmt(s)

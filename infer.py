@@ -90,7 +90,12 @@ class Inferer:
 
     def declare(self, name, t, line):
         cur = self.scope.vars.get(name)
-        self.scope.vars[name] = t if cur is None else unify(cur, t, line, f"variable '{name}'")
+        if cur is None:
+            self.scope.vars[name] = t
+        elif cur.kind == "float" and t.kind == "int":
+            pass                                     # an int may be stored in a float variable
+        else:
+            self.scope.vars[name] = unify(cur, t, line, f"variable '{name}'")
 
     def s_Assign(self, s):
         vt = self.expr(s.value)
@@ -243,6 +248,10 @@ class Inferer:
         if len(argtys) != len(f.node.params):
             raise CompileError("TypeError",
                 f"{e.func}() takes {len(f.node.params)} argument(s), got {len(argtys)}", e.line)
+        for a, t in zip(e.args, argtys):
+            if t.kind in ("list", "dict") and not isinstance(a, (Name, Index)):
+                raise CompileError("TypeError",
+                    f"{e.func}(): put the list/dict in a variable first, then pass the variable", e.line)
         if f.state == "new":
             self.infer_fn(f, argtys)
         else:                                        # busy (recursion) or done: must match
