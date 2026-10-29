@@ -62,6 +62,11 @@ class Scope:
         while s:
             if n in s.vars: return s.vars[n]
             s = s.parent
+    def owner(self, n):                              # the scope that declares n
+        s = self
+        while s:
+            if n in s.vars: return s
+            s = s.parent
 
 class Inferer:
     def __init__(self):
@@ -76,7 +81,62 @@ class Inferer:
                 self.funcs[s.name] = FuncInfo(s)
         for s in prog:
             if not isinstance(s, Def): self.stmt(s)
+        self.check_uncalled()
         return self
+
+    # ---- names-only check for functions that are never called (their types are unknown) ----
+    def check_uncalled(self):
+        for f in self.funcs.values():
+            if f.state == "new":
+                self.r_block(f.node.body, set(f.node.params))
+
+    def r_block(self, body, known):
+        for s in body: self.r_stmt(s, known)
+
+    def r_stmt(self, s, known):
+        k = type(s).__name__
+        if k == "Let":
+            self.r_expr(s.value, known); known.add(s.name)
+        elif k == "Assign":
+            self.r_expr(s.value, known)
+            if isinstance(s.target, Name): self.r_name(s.target, known, assign=True)
+            else: self.r_expr(s.target, known)
+        elif k == "If":
+            self.r_expr(s.cond, known); self.r_block(s.body, known); self.r_block(s.orelse, known)
+        elif k == "While":
+            self.r_expr(s.cond, known); self.r_block(s.body, known)
+        elif k == "For":
+            self.r_expr(s.iter, known); known.add(s.var); self.r_block(s.body, known)
+        elif k == "Return":
+            if s.value is not None: self.r_expr(s.value, known)
+        elif k == "ExprStmt":
+            self.r_expr(s.expr, known)
+        elif k == "Def":
+            self.s_Def(s)
+
+    def r_name(self, e, known, assign=False):
+        if e.name in known or self.globals.lookup(e.name) is not None: return
+        if assign:
+            raise CompileError("NameError",
+                f"'{e.name}' is not declared (declare it first: let {e.name} = ...)", e.line)
+        raise CompileError("NameError", f"name '{e.name}' is not defined", e.line)
+
+    def r_expr(self, e, known):
+        k = type(e).__name__
+        if k == "Name": self.r_name(e, known)
+        elif k == "BinOp": self.r_expr(e.left, known); self.r_expr(e.right, known)
+        elif k == "UnaryOp": self.r_expr(e.operand, known)
+        elif k == "CompareChain":
+            for o in e.operands: self.r_expr(o, known)
+        elif k == "Call":
+            if e.func not in self.funcs and e.func not in BUILTINS and e.func != "range":
+                raise CompileError("NameError", f"function '{e.func}' is not defined", e.line)
+            for a in e.args: self.r_expr(a, known)
+        elif k == "Index": self.r_expr(e.obj, known); self.r_expr(e.index, known)
+        elif k == "ListLit":
+            for x in e.items: self.r_expr(x, known)
+        elif k == "DictLit":
+            for kx, vx in e.pairs: self.r_expr(kx, known); self.r_expr(vx, known)
 
     # ---- statements ----
     def stmt(self, s): getattr(self, "s_" + type(s).__name__)(s)
@@ -97,14 +157,28 @@ class Inferer:
         else:
             self.scope.vars[name] = unify(cur, t, line, f"variable '{name}'")
 
+    def s_Let(self, s):
+        vt = self.expr(s.value)                      # evaluated first: 'let a = a + 1' is a NameError
+        if vt.kind == "none":
+            raise CompileError("TypeError", "cannot assign a value of type none", s.line)
+        if s.name in self.scope.vars:
+            raise CompileError("NameError", f"'{s.name}' is already declared in this scope", s.line)
+        self.scope.vars[s.name] = vt
+
     def s_Assign(self, s):
         vt = self.expr(s.value)
         if vt.kind == "none":
             raise CompileError("TypeError", "cannot assign a value of type none", s.line)
         t = s.target
         if isinstance(t, Name):
-            self.declare(t.name, vt, s.line)
-            t.ty = self.scope.vars[t.name]
+            sc = self.scope.owner(t.name)
+            if sc is None:
+                raise CompileError("NameError",
+                    f"'{t.name}' is not declared (declare it first: let {t.name} = ...)", s.line)
+            cur = sc.vars[t.name]
+            if not (cur.kind == "float" and vt.kind == "int"):   # an int may go into a float variable
+                sc.vars[t.name] = unify(cur, vt, s.line, f"variable '{t.name}'")
+            t.ty = sc.vars[t.name]
         else:
             ot, it = self.expr(t.obj), self.expr(t.index)
             if ot.kind == "list":
@@ -161,7 +235,11 @@ class Inferer:
         e.ty = getattr(self, "e_" + type(e).__name__)(e)
         return e.ty
 
-    def e_Num(self, e):  return FLOAT if e.is_float else INT
+    def e_Num(self, e):
+        if not e.is_float and int(e.value) > 9223372036854775807:
+            raise CompileError("ValueError",
+                "integer literal too large (maximum is 9223372036854775807)", e.line)
+        return FLOAT if e.is_float else INT
     def e_Str(self, e):  return STR
     def e_Bool(self, e): return BOOL
 

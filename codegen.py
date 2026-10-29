@@ -13,6 +13,12 @@ RUNTIME = r'''#include <iostream>
 
 struct PyError : std::runtime_error { using std::runtime_error::runtime_error; };
 static long long py_line = 0;   // source line of the statement being executed
+static int py_depth = 0;        // current call depth (guards against runaway recursion)
+struct PyDepth {
+    PyDepth() { if (py_depth >= 1000) throw PyError("RecursionError: maximum recursion depth exceeded");
+                ++py_depth; }
+    ~PyDepth() { --py_depth; }
+};
 
 // ---- indexing: negative indices + bounds checks ----
 template<class T> T& idx(std::vector<T>& v, long long i) {
@@ -195,6 +201,7 @@ class CodeGen:
 
     def func(self, f):
         self.w(self.sig(f) + " {"); self.depth += 1
+        self.w("PyDepth _depth_guard;")
         for name, t in f.locals.items():                      # hoist locals (Python function scope)
             if name not in f.node.params:
                 self.w(f"{cpp_type(t, f.node.line)} {vn(name)}{{}};")
@@ -220,6 +227,9 @@ class CodeGen:
             self.w(f"idx({self.ex(t.obj)}, {self.ex(t.index)}) = {v};")
         else:
             self.w(f"{self.ex(t.obj)}[{self.ex(t.index)}] = {v};")
+
+    def g_Let(self, s):                              # variable already declared (hoisted) above
+        self.w(f"{vn(s.name)} = {self.ex(s.value)};")
 
     def g_If(self, s):
         self.w(f"if ({self.ex(s.cond)}) {{"); self.body(s.body)
