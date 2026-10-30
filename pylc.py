@@ -21,6 +21,8 @@ def main():
         cpp = compile_source(path.read_text(encoding="utf-8"))
     except CompileError as e:
         sys.exit(str(e))
+    except RecursionError:
+        sys.exit("error: program is nested too deeply")
     except Exception as e:                      # never show a Python traceback
         sys.exit(f"InternalError: {type(e).__name__}: {e}")
     out = path.with_suffix(".cpp")

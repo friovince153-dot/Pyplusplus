@@ -228,9 +228,6 @@ class CodeGen:
         else:
             self.w(f"{self.ex(t.obj)}[{self.ex(t.index)}] = {v};")
 
-    def g_Let(self, s):                              # variable already declared (hoisted) above
-        self.w(f"{vn(s.name)} = {self.ex(s.value)};")
-
     def g_If(self, s):
         self.w(f"if ({self.ex(s.cond)}) {{"); self.body(s.body)
         if s.orelse:

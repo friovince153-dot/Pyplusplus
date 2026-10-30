@@ -49,10 +49,20 @@ BUILTINS = {
     # range is handled inside For.
 }
 
+def assigned_names(body):
+    out = set()
+    for s in body:
+        k = type(s).__name__
+        if k == "Assign" and isinstance(s.target, Name): out.add(s.target.name)
+        elif k == "For": out.add(s.var); out |= assigned_names(s.body)
+        elif k == "If": out |= assigned_names(s.body) | assigned_names(s.orelse)
+        elif k == "While": out |= assigned_names(s.body)
+    return out
+
 class FuncInfo:
     def __init__(self, node):
         self.node, self.state = node, "new"      # new -> busy -> done
-        self.params, self.ret, self.locals = [], None, {}
+        self.params, self.ret, self.locals, self.assigned = [], None, {}, set()
 
 class Scope:
     def __init__(self, parent=None):
@@ -88,6 +98,7 @@ class Inferer:
     def check_uncalled(self):
         for f in self.funcs.values():
             if f.state == "new":
+                self._assigned = assigned_names(f.node.body)
                 self.r_block(f.node.body, set(f.node.params))
 
     def r_block(self, body, known):
@@ -95,11 +106,9 @@ class Inferer:
 
     def r_stmt(self, s, known):
         k = type(s).__name__
-        if k == "Let":
-            self.r_expr(s.value, known); known.add(s.name)
-        elif k == "Assign":
+        if k == "Assign":
             self.r_expr(s.value, known)
-            if isinstance(s.target, Name): self.r_name(s.target, known, assign=True)
+            if isinstance(s.target, Name): known.add(s.target.name)
             else: self.r_expr(s.target, known)
         elif k == "If":
             self.r_expr(s.cond, known); self.r_block(s.body, known); self.r_block(s.orelse, known)
@@ -114,11 +123,13 @@ class Inferer:
         elif k == "Def":
             self.s_Def(s)
 
-    def r_name(self, e, known, assign=False):
-        if e.name in known or self.globals.lookup(e.name) is not None: return
-        if assign:
+    def r_name(self, e, known):
+        if e.name in known: return
+        if e.name in self._assigned:
             raise CompileError("NameError",
-                f"'{e.name}' is not declared (declare it first: let {e.name} = ...)", e.line)
+                f"local variable '{e.name}' is used before it is assigned "
+                "(assigning inside a function makes the name local)", e.line)
+        if self.globals.lookup(e.name) is not None: return
         raise CompileError("NameError", f"name '{e.name}' is not defined", e.line)
 
     def r_expr(self, e, known):
@@ -157,28 +168,19 @@ class Inferer:
         else:
             self.scope.vars[name] = unify(cur, t, line, f"variable '{name}'")
 
-    def s_Let(self, s):
-        vt = self.expr(s.value)                      # evaluated first: 'let a = a + 1' is a NameError
-        if vt.kind == "none":
-            raise CompileError("TypeError", "cannot assign a value of type none", s.line)
-        if s.name in self.scope.vars:
-            raise CompileError("NameError", f"'{s.name}' is already declared in this scope", s.line)
-        self.scope.vars[s.name] = vt
-
     def s_Assign(self, s):
         vt = self.expr(s.value)
         if vt.kind == "none":
             raise CompileError("TypeError", "cannot assign a value of type none", s.line)
         t = s.target
         if isinstance(t, Name):
-            sc = self.scope.owner(t.name)
-            if sc is None:
-                raise CompileError("NameError",
-                    f"'{t.name}' is not declared (declare it first: let {t.name} = ...)", s.line)
-            cur = sc.vars[t.name]
-            if not (cur.kind == "float" and vt.kind == "int"):   # an int may go into a float variable
-                sc.vars[t.name] = unify(cur, vt, s.line, f"variable '{t.name}'")
-            t.ty = sc.vars[t.name]
+            if t.name in self.scope.vars:            # already a variable in THIS scope: same type
+                cur = self.scope.vars[t.name]
+                if not (cur.kind == "float" and vt.kind == "int"):   # an int may go into a float variable
+                    self.scope.vars[t.name] = unify(cur, vt, s.line, f"variable '{t.name}'")
+            else:                                    # first assignment declares it (a local inside functions)
+                self.scope.vars[t.name] = vt
+            t.ty = self.scope.vars[t.name]
         else:
             ot, it = self.expr(t.obj), self.expr(t.index)
             if ot.kind == "list":
@@ -244,6 +246,10 @@ class Inferer:
     def e_Bool(self, e): return BOOL
 
     def e_Name(self, e):
+        if self.fn is not None and e.name in self.fn.assigned and e.name not in self.scope.vars:
+            raise CompileError("NameError",
+                f"local variable '{e.name}' is used before it is assigned "
+                "(assigning inside a function makes the name local)", e.line)
         t = self.scope.lookup(e.name)
         if t is None:
             raise CompileError("NameError", f"name '{e.name}' is not defined", e.line)
@@ -314,7 +320,8 @@ class Inferer:
         arity, kinds, result = BUILTINS[e.func]
         ts = [self.expr(a) for a in e.args]
         if arity is not None and len(ts) not in arity:
-            raise CompileError("TypeError", f"{e.func}() takes {arity} argument(s), got {len(ts)}", e.line)
+            want = " or ".join(str(n) for n in arity)
+            raise CompileError("TypeError", f"{e.func}() takes {want} argument(s), got {len(ts)}", e.line)
         for t, allowed in zip(ts, kinds or []):
             if allowed is not None and t.kind not in allowed and t.kind != "?":
                 raise CompileError("TypeError", f"{e.func}() does not accept {t}", e.line)
@@ -338,7 +345,7 @@ class Inferer:
         return f.ret if f.ret is not None else UNKNOWN
 
     def infer_fn(self, f, argtys):
-        f.state, f.params = "busy", argtys
+        f.state, f.params, f.assigned = "busy", argtys, assigned_names(f.node.body)
         saved = (self.scope, self.fn, self.loops)
         self.scope, self.fn, self.loops = Scope(self.globals), f, 0
         for n, t in zip(f.node.params, argtys): self.scope.vars[n] = t

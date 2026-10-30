@@ -82,6 +82,9 @@ class Parser:
             if t.value in ("break", "continue", "pass"):
                 self.next(); self.expect("NEWLINE")
                 return {"break": Break, "continue": Continue, "pass": Pass}[t.value](ln)
+        if t.kind == "NAME" and t.value == "let" and self.toks[self.i + 1].kind == "NAME":
+            raise CompileError("SyntaxError",
+                "there is no 'let': create a variable by assigning to it, e.g. x = 5", ln)
         e = self.expr()
         if self.at("OP") and self.peek().value in ("=", "+=", "-=", "*=", "/="):
             op = self.next().value
