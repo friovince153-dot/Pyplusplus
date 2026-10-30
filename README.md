@@ -9,7 +9,7 @@ That means a typo or a value with the wrong type is easier to spot. Py++ then tr
 Py++ is for students and beginners who want to:
 
 - practise writing programs with variables, loops, lists, and functions;
-- catch common mistakes, such as misspelling a variable name;
+- catch common mistakes, such as using a variable name that does not exist;
 - explore how a programming language can translate code into a runnable program.
 
 ## Get started
@@ -49,13 +49,13 @@ Replace `hello.pyl` with your file's name. Py++ creates the translated C++ file 
 
 ### Variables and types
 
-Use `let` to create a variable. Py++ figures out its type from the first value. The type stays the same while the program runs.
+Create a variable by giving it a value. Py++ figures out its type from the first value. The type stays the same while the program runs.
 
 ```pyl
-let name = "Ana"
-let age = 20
-let price = 9.5
-let ok = True
+name = "Ana"
+age = 20
+price = 9.5
+ok = True
 age += 1
 print(name, age, price, ok)
 ```
@@ -75,7 +75,11 @@ Ana 21 9.5 True
 | `list` | `[1, 2, 3]` (all items the same type) |
 | `dict` | `{"a": 1}` (keys one type, values one type) |
 
-Use `let` the first time you create a variable. After that, use `name = value` to change it. For example, `age = 21` updates an existing `age` variable.
+The first time you assign to a name, Py++ creates the variable. After that, `name = value` changes it. For example, `age = 21` updates the existing `age` variable.
+
+A variable must be assigned on an earlier line than any line that reads it. Reading a name that has not been assigned yet is an error.
+
+Check your spelling when you assign. `agee = 21` creates a new variable named `agee`, and `age` does not change. Py++ can only report a misspelled name when you try to read it.
 
 You can store an integer in a float variable, but you cannot store a float in an integer variable.
 
@@ -99,7 +103,7 @@ for i in range(10, 0, -4):
     print("down", i)
 for ch in "hey":
     print(ch)
-let total = 0
+total = 0
 for n in [4, 8, 15]:
     if n == 8:
         continue
@@ -137,15 +141,8 @@ def area(w, h):
 def greet(name):
     print("hi", name)
 
-let visits = 0
-def visit():
-    visits += 1
-
 greet("Ana")
 print(area(3, 4))
-visit()
-visit()
-print(visits)
 ```
 
 Output:
@@ -153,10 +150,47 @@ Output:
 ```text
 hi Ana
 12
-2
 ```
 
-**Where variables work:** A variable created inside a function is local to that function. A function can also read or update a variable created at the top level. If a function creates a local variable with the same name as a top-level one, the local variable is used inside that function.
+**Where variables work:** A function can read variables created at the top level. When a function assigns to a name, Py++ treats it as a new variable that belongs only to that function, even if a top-level variable has the same name. The top-level variable does not change. The function uses that local variable everywhere, so reading it before its first assignment is an error.
+
+```pyl
+x = 1
+
+def change():
+    x = 99
+    return x
+
+def read():
+    return x * 10
+
+print(change(), x, read())
+```
+
+Output:
+
+```text
+99 1 10
+```
+
+To change a top-level value from a function, return the new value and assign it at the top level:
+
+```pyl
+count = 0
+
+def bump(n):
+    return n + 1
+
+count = bump(count)
+count = bump(count)
+print(count)
+```
+
+Output:
+
+```text
+2
+```
 
 Functions can call themselves; this is called recursion. Py++ learns a function's parameter types from its first call, so use the same types in later calls. To pass a list or dictionary to a function, save it in a variable first.
 
@@ -165,15 +199,15 @@ Functions can call themselves; this is called recursion. Py++ learns a function'
 Lists store items in order. Dictionaries store values under keys.
 
 ```pyl
-let scores = [90, 85, 77]
+scores = [90, 85, 77]
 append(scores, 100)
 print(scores, len(scores), scores[-1])
 scores[0] = 95
 print(sorted(scores), sum(scores))
-let ages = {"ann": 31, "bob": 27}
+ages = {"ann": 31, "bob": 27}
 ages["cy"] = 45
 print(ages["ann"], keys(ages), contains(ages, "bob"))
-let words = split("the quick brown fox")
+words = split("the quick brown fox")
 print(words, upper(words[0]), len(words))
 ```
 
@@ -219,9 +253,9 @@ These errors stop the program before it starts.
 | --- | --- | --- |
 | `SyntaxError (line N): expected :, got 'NEWLINE'` | A line of code is missing something, such as the `:` after an `if`. | Check the line shown and add the missing symbol. |
 | `IndentationError (line N): use spaces, not tabs` | The line is indented with a tab. | Indent using 4 spaces. |
-| `NameError (line N): name 'x' is not defined` | The program uses a name it does not know. | Check the spelling, or create it with `let` first. |
-| `NameError (line N): 'x' is not declared (declare it first: let x = ...)` | You tried to change a variable that has not been created. | Create it with `let x = ...`, or check the spelling. |
-| `NameError (line N): 'x' is already declared in this scope` | The same variable is created twice in the same scope. | Remove the extra `let` and update it with `x = ...`. |
+| `NameError (line N): name 'x' is not defined` | The program reads a name that has not been assigned. | Check the spelling, or give the name a value before you use it. |
+| `NameError (line N): local variable 'x' is used before it is assigned ...` | Inside a function, the code reads a name that the same function assigns later, so Py++ treats it as local. | Assign it before reading it, or pass the value into the function as a parameter. |
+| `NameError (line N): function 'f' is not defined` | The program calls a function that does not exist. | Check the spelling, or create the function with `def`. |
 | `TypeError (line N): variable 'count': expected int, got str` | A variable was given a value of a different type. | Keep the same type, or create a new variable. |
 | `TypeError (line N): add() takes 2 argument(s), got 1` | A function call is missing an argument. | Check how many arguments the function needs. |
 | `TypeError (line N): ... put the list/dict in a variable first ...` | A list or dictionary was written directly inside a function call. | Save it in a variable, then pass the variable. |
@@ -256,6 +290,8 @@ These are current limits of the language:
 
 - A variable's type cannot change after it is created. For example, `x /= 2` works only if `x` is already a float.
 - A function uses the parameter types from its first call. Later calls must use the same types.
+- Misspelling a variable name when you assign to it creates a new variable instead of an error.
+- A function cannot change a top-level variable. Assigning inside a function creates a local variable, so return the new value instead.
 - Copying a list or dictionary to another variable makes a separate copy.
 - Whole numbers have a maximum size. Very large results can wrap around.
 - Dictionary keys are listed in sorted order.
