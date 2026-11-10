@@ -1,0 +1,12 @@
+text = "the cat and the dog and the bird"
+words = split(text)
+counts = {}
+for w in words:
+    if contains(counts, w):
+        counts[w] += 1
+    else:
+        counts[w] = 1
+
+for w in sorted(keys(counts)):
+    print(w, counts[w])
+print("Unique words:", len(counts))

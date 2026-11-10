@@ -1,0 +1,4 @@
+name = "Ana"
+items = 3
+print("Hello " + name)
+print("You bought " + items + " items")

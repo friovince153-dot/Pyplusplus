@@ -1,0 +1,14 @@
+prices = {"apple": 0.5, "bread": 2.25, "milk": 1.75, "cheese": 6.5}
+cart = ["apple", "bread", "milk", "milk", "cheese", "apple"]
+
+total = 0.0
+for item in cart:
+    total += prices[item]
+print("Items:", len(cart))
+print("Subtotal:", total)
+
+if total > 10:
+    discount = total * 0.25
+    total -= discount
+    print("Discount:", discount)
+print("Total:", total)

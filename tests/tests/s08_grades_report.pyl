@@ -1,0 +1,23 @@
+def letter(avg):
+    if avg >= 90:
+        return "A"
+    elif avg >= 80:
+        return "B"
+    elif avg >= 70:
+        return "C"
+    return "F"
+
+scores = [88, 92, 79, 95]
+total = sum(scores)
+average = total / len(scores)
+best = scores[0]
+worst = scores[0]
+for s in scores:
+    if s > best:
+        best = s
+    if s < worst:
+        worst = s
+print("Scores:", scores)
+print("Average:", average)
+print("Highest:", best, "Lowest:", worst)
+print("Letter:", letter(average))

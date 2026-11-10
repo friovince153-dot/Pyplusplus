@@ -1,0 +1,12 @@
+def apply(balance, amount):
+    if amount < 0 and balance + amount < 0:
+        print("  declined:", amount)
+        return balance
+    return balance + amount
+
+balance = 100
+transactions = [50, -30, -200, 25, -75, -10]
+for t in transactions:
+    balance = apply(balance, t)
+    print("after", t, "balance is", balance)
+print("final balance:", balance)

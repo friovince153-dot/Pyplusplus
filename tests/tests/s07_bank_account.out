@@ -1,0 +1,8 @@
+after 50 balance is 150
+after -30 balance is 120
+  declined: -200
+after -200 balance is 120
+after 25 balance is 145
+after -75 balance is 70
+after -10 balance is 60
+final balance: 60

@@ -1,0 +1,12 @@
+# Convert Celsius to Fahrenheit
+def to_fahrenheit(c):
+    return c * 9 / 5 + 32
+
+print("Temperature table")
+for c in range(0, 41, 10):
+    print(c, "C =", to_fahrenheit(c), "F")
+
+boiling = to_fahrenheit(100)
+print("Water boils at", boiling, "F")
+if boiling > 200:
+    print("That is hot")

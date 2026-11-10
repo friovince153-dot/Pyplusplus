@@ -1,0 +1,15 @@
+def reverse(s):
+    result = ""
+    for ch in s:
+        result = ch + result
+    return result
+
+def is_palindrome(s):
+    clean = lower(s)
+    return clean == reverse(clean)
+
+for word in ["Level", "python", "Racecar", "noon", "hello"]:
+    if is_palindrome(word):
+        print(word, "is a palindrome")
+    else:
+        print(word, "is not a palindrome")

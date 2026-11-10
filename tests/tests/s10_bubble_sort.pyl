@@ -1,0 +1,13 @@
+def bubble_sort(xs):
+    n = len(xs)
+    for i in range(n - 1):
+        for j in range(n - 1 - i):
+            if xs[j] > xs[j + 1]:
+                tmp = xs[j]
+                xs[j] = xs[j + 1]
+                xs[j + 1] = tmp
+
+numbers = [64, 34, 25, 12, 22, 11, 90]
+print("Before:", numbers)
+bubble_sort(numbers)
+print("After:", numbers)

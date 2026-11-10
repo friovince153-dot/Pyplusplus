@@ -1,0 +1,6 @@
+def last_digit(n, base):
+    return n % base
+
+print(last_digit(47, 10))
+print(last_digit(47, 0))
+print("not reached")
